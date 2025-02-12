@@ -27,7 +27,7 @@ variable "ec2_archi" {
 data "aws_ami" "monubuntu" {
   # executable_users = ["self"]
   most_recent      = true
-  owners = ["aws-marketplace"]
+  owners = ["amazon"]
   
   filter {
     name   = "name"
