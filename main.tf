@@ -1,85 +1,63 @@
-# terraform {
-#   backend "s3" {
-#     bucket = "tf-demo-state-oclock"
-#     key    = "terraform.tfstate"
-#     region = "us-east-1"
-#   }
-# }
-
-provider "dns" {}
-
 provider "aws" {
   region = "us-east-1"
 }
 
-variable "ec2_type" {
-  description = "Le type d'instance qu'on souhaite"
-  type = string
-  default = "t4g.nano"
+locals {
+  subnet_list = toset(["subnet-0259333aec231062d", "subnet-05ddb429c8a79cac1"])
 }
 
-variable "ec2_archi" {
-  description = "Architecture to use"
-  type = string
-  default = "arm64"
-}
+resource "aws_security_group" "admin_ssh" {
+  name        = "admin_ssh"
+  description = "Allow SSH from admins"
+  vpc_id      = "vpc-022f458c280ac21a5"
 
-data "aws_ami" "monubuntu" {
-  # executable_users = ["self"]
-  most_recent      = true
-  owners = ["amazon"]
-  
-  filter {
-    name   = "name"
-    values = ["ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04*"]
-  }
-
-  filter {
-    name   = "root-device-type"
-    values = ["ebs"]
-  }
-
-  filter {
-    name   = "virtualization-type"
-    values = ["hvm"]
-  }
-
-  filter {
-    name = "architecture"
-    values = [var.ec2_archi]
-  }
-}
-
-
-resource "aws_instance" "mavm" {
-  ami           = "ami-0a7a4e87939439934"
-  instance_type = var.ec2_type
-  key_name      = "vockey"
   tags = {
-    Name = "mavm"
+    Name = "admin_ssh"
   }
 }
 
-data "dns_a_record_set" "google" {
-  host = "google.com"
+variable "admin_ips" {
+  description = "les ip's des admins"
+  default     = ["8.8.8.8", "1.1.1.1"]
 }
 
-output "google_addrs" {
-  value = join(",", data.dns_a_record_set.google.addrs)
+variable "mon_ip" {
+  description = "mon ip a moa"
+  type        = string
+  default     = "92.151.128.188"
 }
 
-output "public_ip" {
-  value = aws_instance.mavm.public_ip
+resource "aws_vpc_security_group_ingress_rule" "ssh-in" {
+  security_group_id = aws_security_group.admin_ssh.id
+  cidr_ipv4         = "${var.mon_ip}/32"
+  from_port         = 22
+  ip_protocol       = "tcp"
+  to_port           = 22
 }
 
-output "private_ip" {
-  value = aws_instance.mavm.private_ip
+resource "aws_vpc_security_group_ingress_rule" "ssh-ins" {
+  for_each          = toset(var.admin_ips)
+  security_group_id = aws_security_group.admin_ssh.id
+  cidr_ipv4         = "${each.value}/32"
+  from_port         = 22
+  ip_protocol       = "tcp"
+  to_port           = 22
 }
 
-output "mon_ami_id" {
-  value = data.aws_ami.monubuntu.id
+resource "aws_vpc_security_group_egress_rule" "all-out" {
+  security_group_id = aws_security_group.admin_ssh.id
+  cidr_ipv4         = "0.0.0.0/0"
+  ip_protocol       = "-1"
 }
 
-output "mon_ami_name" {
-  value = data.aws_ami.monubuntu.name
+resource "aws_instance" "mavmeuh" {
+  for_each               = local.subnet_list
+  ami                    = "ami-0a7a4e87939439934"
+  instance_type          = "t4g.nano"
+  subnet_id              = each.value
+  vpc_security_group_ids = [aws_security_group.admin_ssh.id]
+  key_name               = "vockey"
+  tags = {
+    Name = "mavmeuh"
+  }
 }
