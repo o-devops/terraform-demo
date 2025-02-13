@@ -1,3 +1,14 @@
+terraform { 
+  cloud { 
+    
+    organization = "Nornes" 
+
+    workspaces { 
+      name = "mon-lab-with-sg" 
+    } 
+  } 
+}
+
 provider "aws" {
   region = "us-east-1"
 }
